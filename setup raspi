@@ -21,6 +21,7 @@ source env/bin/activate
 
 Langkah 7.4
 pip install RPi.GPIO RPLCD
+pip install smbus2
 
 Langkah 7.5
 python3 bab2.py
