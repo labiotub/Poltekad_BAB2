@@ -1,0 +1,3 @@
+sudo apt-get install python3-smbus i2c-tools
+
+pip3 install RPLCD pad4pi RPi.GPIO
