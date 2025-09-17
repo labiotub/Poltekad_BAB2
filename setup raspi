@@ -1,7 +1,26 @@
+Langkah 4.4 
+sudo apt update
+sudo apt upgrade -y
+
+Langkah 5.1
 sudo raspi-config
 
-sudo apt-get update
-sudo apt-get upgrade -y
-sudo apt-get install python3-pip python3-smbus i2c-tools -y
+Langkah 6.1
+sudo apt install i2c-tools -y
 
-pip3 install RPi.GPIO pad4pi RPLCD
+Langkah 7.1
+mkdir -p /home/pi/kel-X/bab2
+cd /home/pi/kel-X/bab2
+
+Langkah 7.2
+nano bab2.py
+
+Langkah 7.3
+python3 -m venv env
+source env/bin/activate
+
+Langkah 7.4
+pip install RPi.GPIO RPLCD
+
+Langkah 7.5
+python3 bab2.py
