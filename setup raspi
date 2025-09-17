@@ -1,5 +1,7 @@
-sudo apt-get install python3-smbus i2c-tools
+sudo raspi-config
 
-pip3 install RPLCD pad4pi RPi.GPIO
+sudo apt-get update
+sudo apt-get upgrade -y
+sudo apt-get install python3-pip python3-smbus i2c-tools -y
 
-nano bab2.py
+pip3 install RPi.GPIO pad4pi RPLCD
