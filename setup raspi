@@ -9,8 +9,8 @@ Langkah 6.1
 sudo apt install i2c-tools -y
 
 Langkah 7.1
-mkdir -p /home/pi/kel-X/bab2
-cd /home/pi/kel-X/bab2
+mkdir -p /home/praktikan/kel_X/bab2
+cd /home/praktikan/kel_X/bab2
 
 Langkah 7.2
 nano bab2.py
