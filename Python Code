@@ -3,16 +3,24 @@ import RPi.GPIO as GPIO
 import time
 from RPLCD.i2c import CharLCD
 
-# --- PIN BCM ---
-ROW_PINS = [5, 6, 13, 19]    # R1, R2, R3, R4
-COL_PINS = [12, 16, 20, 21]  # C1, C2, C3, C4
+# -------------------------------
+# Konfigurasi PIN
+# -------------------------------
+# PIR
+PIR_PIN = 23
 
-# --- LED ---
+# LED
 LED_MERAH = 17
 LED_KUNING = 27
 LED_HIJAU = 22
 
-# --- Keymap 4x4 ---
+# Stepper motor (4 pin ULN2003)
+STEPPER_PINS = [4, 18, 24, 25]  # ganti sesuai wiring Anda
+
+# Keypad 4x4 (wiring Anda)
+ROW_PINS = [5, 6, 13, 19]    # baris
+COL_PINS = [12, 16, 20, 21]  # kolom
+
 KEYMAP = [
     ['1','2','3','A'],
     ['4','5','6','B'],
@@ -20,87 +28,167 @@ KEYMAP = [
     ['*','0','#','D']
 ]
 
-# --- Password ---
+# Password
 PASSWORD = "1234"
 
-# --- LCD I2C ---
+# LCD I2C
 lcd = CharLCD('PCF8574', 0x27)
 
+# Buzzer
+BUZZER = 26
+
+# Step sequence untuk ULN2003
+STEP_SEQ = [
+    [1,0,0,1],
+    [1,0,0,0],
+    [1,1,0,0],
+    [0,1,0,0],
+    [0,1,1,0],
+    [0,0,1,0],
+    [0,0,1,1],
+    [0,0,0,1]
+]
+
+# -------------------------------
+# Setup
+# -------------------------------
 def setup():
     GPIO.setmode(GPIO.BCM)
+
+    # PIR
+    GPIO.setup(PIR_PIN, GPIO.IN)
+
+    # LED
+    for pin in [LED_MERAH, LED_KUNING, LED_HIJAU]:
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, GPIO.LOW)
+
+    # Stepper
+    for pin in STEPPER_PINS:
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, 0)
+
+    # Keypad
     for r in ROW_PINS:
         GPIO.setup(r, GPIO.OUT)
         GPIO.output(r, GPIO.LOW)
     for c in COL_PINS:
         GPIO.setup(c, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-    GPIO.setup(LED_MERAH, GPIO.OUT)
-    GPIO.setup(LED_KUNING, GPIO.OUT)
-    GPIO.setup(LED_HIJAU, GPIO.OUT)
-    GPIO.output(LED_MERAH, GPIO.LOW)
-    GPIO.output(LED_KUNING, GPIO.HIGH)   # standby awal
-    GPIO.output(LED_HIJAU, GPIO.LOW)
+    # Buzzer
+    GPIO.setup(BUZZER, GPIO.OUT)
+    GPIO.output(BUZZER, GPIO.LOW)
+
+    # LCD standby
+    lcd.clear()
+    show_message("Smartdoor", "Sistem Standby")
+    GPIO.output(LED_KUNING, GPIO.HIGH)
 
 def cleanup():
-    GPIO.cleanup()
     lcd.clear()
+    GPIO.cleanup()
 
+# -------------------------------
+# Keypad
+# -------------------------------
 def get_key():
     while True:
         for i, r in enumerate(ROW_PINS):
             GPIO.output(r, GPIO.HIGH)
-            time.sleep(0.001)
+            time.sleep(0.002)
             for j, c in enumerate(COL_PINS):
                 if GPIO.input(c) == GPIO.HIGH:
                     key = KEYMAP[i][j]
                     while GPIO.input(c) == GPIO.HIGH:
                         time.sleep(0.01)
-                    time.sleep(0.1)
                     GPIO.output(r, GPIO.LOW)
                     return key
             GPIO.output(r, GPIO.LOW)
         time.sleep(0.01)
 
+# -------------------------------
+# LCD helper (center text)
+# -------------------------------
 def show_message(line1="", line2=""):
     lcd.clear()
-    lcd.cursor_pos = (0, 0)  # baris pertama
-    lcd.write_string(line1[:16])  # max 16 karakter
-    lcd.cursor_pos = (1, 0)  # baris kedua
-    lcd.write_string(line2[:16])
+    lcd.cursor_pos = (0, 0)
+    lcd.write_string(line1.center(16))  # rata tengah
+    lcd.cursor_pos = (1, 0)
+    lcd.write_string(line2.center(16))  # rata tengah
 
+# -------------------------------
+# Stepper
+# -------------------------------
+def stepper_turn(steps=512, delay=0.002):
+    for _ in range(steps):
+        for seq in STEP_SEQ:
+            for pin, val in zip(STEPPER_PINS, seq):
+                GPIO.output(pin, val)
+            time.sleep(delay)
+    # Matikan motor setelah gerakan
+    for pin in STEPPER_PINS:
+        GPIO.output(pin, 0)
+
+# -------------------------------
+# Buzzer helper
+# -------------------------------
+def beep(times=1, delay=0.2):
+    for _ in range(times):
+        GPIO.output(BUZZER, GPIO.HIGH)
+        time.sleep(delay)
+        GPIO.output(BUZZER, GPIO.LOW)
+        time.sleep(delay)
+
+# -------------------------------
+# Main Program
+# -------------------------------
 def main():
     try:
         setup()
-        show_message("Masukkan", "Password:")
-
-        input_pw = ""
         while True:
-            k = get_key()
-            if k == "#":
-                if input_pw == PASSWORD:
-                    show_message("Password Benar", "Akses Diterima")
-                    GPIO.output(LED_KUNING, GPIO.LOW)
-                    GPIO.output(LED_HIJAU, GPIO.HIGH)
-                    time.sleep(2)
-                    GPIO.output(LED_HIJAU, GPIO.LOW)
-                    GPIO.output(LED_KUNING, GPIO.HIGH)
-                    show_message("Masukkan", "Password:")
-                    input_pw = ""
-                else:
-                    show_message("Password Salah", "Coba Lagi")
-                    GPIO.output(LED_KUNING, GPIO.LOW)
-                    GPIO.output(LED_MERAH, GPIO.HIGH)
-                    time.sleep(2)
-                    GPIO.output(LED_MERAH, GPIO.LOW)
-                    GPIO.output(LED_KUNING, GPIO.HIGH)
-                    show_message("Masukkan", "Password:")
-                    input_pw = ""
-            elif k == "*":
+            if GPIO.input(PIR_PIN):
+                # Gerakan terdeteksi
+                show_message("Welcome", "Masukkan Password")
+                GPIO.output(LED_KUNING, GPIO.HIGH)
+
                 input_pw = ""
-                show_message("Masukkan", "Password:")
+                while True:
+                    k = get_key()
+                    if k == "#":
+                        if input_pw == PASSWORD:
+                            # Password benar
+                            show_message("Password Benar", "Akses Diterima")
+                            GPIO.output(LED_KUNING, GPIO.LOW)
+                            GPIO.output(LED_HIJAU, GPIO.HIGH)
+
+                            beep(2, 0.1)  # bunyi 2x pendek
+
+                            # Stepper buka pintu
+                            stepper_turn(512)  # arah buka
+                            time.sleep(0.5)    # waktu pintu terbuka
+                            stepper_turn(512)  # arah tutup
+
+                            GPIO.output(LED_HIJAU, GPIO.LOW)
+                            GPIO.output(LED_KUNING, GPIO.HIGH)
+                            show_message("Smartdoor", "Sistem Standby")
+                            break
+                        else:
+                            # Password salah
+                            show_message("Password Salah", "Coba Lagi")
+                            GPIO.output(LED_MERAH, GPIO.HIGH)
+                            beep(3, 0.2)  # bunyi 3x
+                            time.sleep(1)
+                            GPIO.output(LED_MERAH, GPIO.LOW)
+                            show_message("Masukkan", "Password")
+                            input_pw = ""
+                    elif k == "*":
+                        input_pw = ""
+                        show_message("Masukkan", "Password")
+                    else:
+                        input_pw += k
+                        show_message("Masukkan:", "*" * len(input_pw))
             else:
-                input_pw += k
-                show_message("Masukkan:", "*" * len(input_pw))
+                time.sleep(0.2)
 
     except KeyboardInterrupt:
         print("\nProgram dihentikan.")
